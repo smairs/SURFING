@@ -1,163 +1,72 @@
-import glob
-import re
-import os
-import logging
-logging.basicConfig(level=logging.INFO)
-logging.root.setLevel(logging.INFO)
-from starlink import wrapper,kappa,convert
-wrapper.change_starpath('/star')
+# Import Necessary Modules
+from SURFING.reduce import reduce_combined_p0_p1,reduce_individual_p0_p1
+from SURFING.postprocess import moment0_residuals,coadd_results,convert_to_fits
 
-## User Defined Parameters
+#-------------------------------------------------------------------------------------------
+#####
+# User Defined Parameters
+#####
+
+# The region associated with the supplied datescans
 region      = 'SERPENS_SOUTH'
+
+# The list of datescans you want to reduce in one batch
+# (Observations will be reduced individually, then co-added afterwards)
 datescans   = ['20220307_73']
+
+# The parameter file to offer ORACDR. A blank string assumes all default parameters
 parfile     = "config/SURFING.ini"
+
+# The ORACDR recipe. For SURFING, it is appropirate to use "REDUCE_SCIENCE_NARROWLINE"
 recipe      = 'REDUCE_SCIENCE_NARROWLINE'
+
+# A Key-Value paring of the Molecules associated with each subband. For SURFING:
+# C18O Signal = Subband 1. The Image band is subband 4.
+# 13CO Signal = Subband 2. The Image band is subband 5.
+# 12CO Signal = Subband 3. The Image band is subband 6.
+# This can be confirmed in the Het Setup of the JCMTOT.
 mol_subband = {'C18O':1,'13CO':2,'CO':3}
 
-outputs = []
-for datescan in datescans:
+#-------------------------------------------------------------------------------------------
 
-    # Make output directory
-    os.system('mkdir reduced/{}'.format(datescan.split('_')[0]))
-    os.system('mkdir reduced/{}/{}'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5)))
+###########################################
+###########################################
+# Begin Main Code
+###########################################
+###########################################
 
-    # Populate raw and out paths
-    rawpath    = 'raw/{}/{}/'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5))
-    outpath    = 'reduced/{}/{}'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5))
+#####
+# Begin the reduction! Start with the combined P0 and P1 reduction
+#####
+print('Reducing P0 and P1 together...')
+reduce_combined_p0_p1(datescans,recipe,parfile=parfile)
 
-    # Collect raw files into list 
-    raw_files = glob.glob(os.path.join(rawpath,'*sdf'))
+#####
+# Now, reduce P0 and P1 individually to see if we have an issue with an individual detector (QA testing)
+#####
+print('\nReducing P0 and P1 separately...')
+reduce_individual_p0_p1(datescans,recipe,parfile=parfile)
 
-    # Run ORACDR
-    print('\nNow running ORACDR for: {}...'.format(datescan))
-    output = wrapper.oracdr('ACSIS',loop='file',dataout=outpath,recipe=recipe,rawfiles=raw_files,recpars=parfile,verbose=True,debug=True)
-    outputs.append(output)
-    os.system('mv {}/* {}/'.format(output.outdir,outpath))
-    os.system('rm -r {}'.format(output.outdir))
-
-summaryfile = open('Summary.txt','w')
-print('\n#####\n#####\nSummary:\n')
-for datescan,output in zip(datescans,outputs):
-    #Save the Summary to a file
-    summaryfile.write('~~~{}~~~\n#######\n'.format(datescan))
-    summaryfile.write('The run log for {} can be found here {}'.format(datescan,output.runlog))
-    summaryfile.write('\nThe datafiles are listed below:')
-    summaryfile.write(re.sub('ORACworking\w+/','','\n'.join(output.datafiles)))
-    summaryfile.write('\nThe image files are listed below:')
-    summaryfile.write(re.sub('ORACworking\w+/','','\n'.join(output.imagefiles)))
-    summaryfile.write('\nThe additional logs are listed below:')
-    summaryfile.write(re.sub('ORACworking\w+/','','\n'.join(output.logfiles)))
-    summaryfile.write('')
-
-    #Print the summary to the screen
-    print('~~~{}~~~\n#######\n'.format(datescan))
-    print('The run log for {} can be found here {}'.format(datescan,output.runlog))
-    print('\nThe datafiles are listed below:')
-    print(re.sub('ORACworking\w+/','','\n'.join(output.datafiles)))
-    print('\nThe image files are listed below:')
-    print(re.sub('ORACworking\w+/','','\n'.join(output.imagefiles)))
-    print('\nThe additional logs are listed below:')
-    print(re.sub('ORACworking\w+/','','\n'.join(output.logfiles)))
-    print('')
-
-print('\nThis summary is available here: Summary.txt\n')
-
-print('\nNow constructing P0 and P1 separately...')
-# Now creating P0 and P1 reductions individually along with their residual Moment 0 maps
-
-for eachpol in ['P0','P1']:
-    
-    print('\n\t{}...'.format(eachpol))
-
-    # Define "bad" receptors. N = Namakanui, U|W|A =Uu|Aweoweo|Alaihi, 0|1 = Polarisation, U|L = Upper or Lower sideband  
-    if eachpol == 'P0':
-        BRlist = ['NU1L','NU1U','NW1L','NW1U','NA1L','NA1U']
-    elif eachpol == 'P1':
-        BRlist = ['NU0L','NU0U','NW0L','NW0U','NA0L','NA0U']
-    
-    for datescan in datescans:
-
-        # Populate raw and out paths
-        rawpath    = 'raw/{}/{}'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5))
-        if not os.path.exists('reduced/{}/{}/{}/'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5),eachpol)):
-            os.system('mkdir reduced/{}/{}/{}/'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5),eachpol))
-        outpath    = 'reduced/{}/{}/{}'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5),eachpol)
-    
-        # Collect raw files into list 
-        raw_files = glob.glob(os.path.join(rawpath,'*sdf'))
-    
-        # Run ORACDR
-        print('\nNow running ORACDR for: {}...'.format(datescan))
-        output = wrapper.oracdr('ACSIS',loop='file',dataout=outpath,recipe=recipe,rawfiles=raw_files,recpars=parfile,calib='bad_receptors={}'.format(':'.join(BRlist)),verbose=True,debug=True)
-        os.system('mv {}/* {}'.format(output.outdir,outpath))
-        os.system('rm -r {}'.format(output.outdir))
-        os.system('mkdir {}/logfiles; mv {}/*log* {}/logfiles'.format(outpath,outpath,outpath))
-        os.system('mkdir {}/imagefiles; mv {}/*png {}/imagefiles'.format(outpath,outpath,outpath))
-
+#####
+# Now, make P1-P0 subtraction maps for Moment 0 to assess residual for structure
+# In a perfect world, this would produce a blank map, but sometimes artifacts/sensitivity differences
+# can lead to different signals from the two detectors (P0 and P1)
+#####
 
 print('\nSubtracting P0 Moment 0 maps from P1 Moment 0 maps...')
-for datescan in datescans:
-    
-    P0_mom0 = glob.glob('reduced/{}/{}/{}/g*integ.sdf'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5),'P0'))
-    P1_mom0 = glob.glob('reduced/{}/{}/{}/g*integ.sdf'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5),'P1'))
+moment0_residuals(datescans,mol_subband)
 
-    if not os.path.exists('reduced/{}/{}/Moment0_residuals/'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5))):
-        os.system('mkdir reduced/{}/{}/Moment0_residuals/'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5)))
-
-    outsub  = 'reduced/{}/{}/Moment0_residuals/'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5))   
- 
-    for eachmol in mol_subband:
-        thissubband = mol_subband[eachmol]
-        outsub = outsub+'{}_P1_minus_P0_integ.sdf'.format(eachmol)
-
-        P0_coadd_thismol = ''
-        P1_coadd_thismol = ''
-
-        for P0file in P0_mom0:
-            if P0file.endswith('{}_integ.sdf'.format(thissubband)):
-                P0_coadd_thismol = P0file
-    
-        for P1file in P1_mom0:
-            if P1file.endswith('{}_integ.sdf'.format(thissubband)):
-                P1_coadd_thismol = P1file
-
-        if P0_coadd_thismol != '':
-            if P1_coadd_thismol != '':
-                kappa.sub(P1_coadd_thismol,P0_coadd_thismol,outsub)    
-
-print('\nConverting SDF files to FITS for "non-Starlink" people ;p...')
-for datescan in datescans:
-
-    sdf_files_1 = sorted(list(glob.glob('reduced/{}/{}/*sdf'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5)))))
-    sdf_files_2 = sorted(list(glob.glob('reduced/{}/{}/*/*sdf'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5)))))
-    all_sdf_files = sdf_files_1+sdf_files_2
-    for i,eachsdf in enumerate(all_sdf_files):
-        print('\tFile {} of {}...'.format(i+1,len(all_sdf_files)))
-        convert.ndf2fits(eachsdf,eachsdf.replace('.sdf','.fits'))
-
+#####
+# Produce final co-add including the new observations
+#####
 print('\nCo-adding the results with the main files...')
-for eachmol in mol_subband:
-    reduced_files = []
-    for datescan in datescans:
-        reducedpath = 'reduced/{}/{}/'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5))
-        reduced_files = reduced_files+list(glob.glob(reducedpath+'ga*_{}_reduced001.sdf'.format(mol_subband[eachmol])))
-    coadd_out = 'coadd_temp/{}_{}_temp_coadd.sdf'.format(region,eachmol)
-    if not os.path.exists('coadd_temp/'):
-        os.system('mkdir coadd_temp/')
-    kappa.wcsmosaic(reduced_files,out=coadd_out,ref=reduced_files[0])
+coadd_results(datescans,mol_subband,region)
 
-    if not os.path.exists('coadds'):
-        os.system('mkdir coadds')
-        os.system('mv {} coadds/{}_{}_coadd.sdf'.format(coadd_out,region,eachmol))
-    else:
-        kappa.wcsmosaic([coadd_out,'coadds/{}_{}_coadd.sdf'.format(region,eachmol)],out='coadds/{}_{}_coadd_new.sdf'.format(region,eachmol),ref='coadds/{}_{}_coadd.sdf'.format(region,eachmol))
-        os.system('rm coadds/{}_{}_coadd.sdf'.format(region,eachmol))
-        os.system('mv coadds/{}_{}_coadd_new.sdf coadds/{}_{}_coadd.sdf'.format(region,eachmol,region,eachmol))
-
-    if os.path.exists('coadds/{}_{}_coadd.fits'.format(region,eachmol)):
-        os.system('rm coadds/{}_{}_coadd.fits'.format(region,eachmol))
-    convert.ndf2fits('coadds/{}_{}_coadd.sdf'.format(region,eachmol),'coadds/{}_{}_coadd.fits'.format(region,eachmol))
-        
+#####
+# Convert SDF to FITS for convenience
+#####
+print('\nConverting SDF files to FITS for "non-Starlink" people ;p...')
+convert_to_fits(datescans)
 
 print('\n\n######################')
 print('              ___            ___')
