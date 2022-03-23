@@ -19,13 +19,16 @@ def DR_setup(datescans):
         try:
             os.listdir('raw/{}/{}/*sdf'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5)))
         except FileNotFoundError:
-            print('Oh no! There is no raw data available in a directory called: \nraw/{}/{}/\n \ 
-                    Please create and/or populate this directory with the raw SDF files \ 
-                    you intend to reduce.'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5)))
+            print('Oh no! There is no raw data available in a directory called: \nraw/{}/{}/\n'\
+                    'Please create and/or populate this directory with the raw SDF files'\
+                    'you intend to reduce.'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5)))
 
         # Make Output Directories
-        if not os.path.exists(' reduced/{}'.format(datescan.split('_')[0])):
+        if not os.path.exists('reduced'):
+            os.system('mkdir reduced')
+        if not os.path.exists('reduced/{}'.format(datescan.split('_')[0])):
             os.system('mkdir reduced/{}'.format(datescan.split('_')[0]))
+        if not os.path.exists('reduced/{}/{}'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5))):
             os.system('mkdir reduced/{}/{}'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5)))
 
 
@@ -78,7 +81,7 @@ def reduce_combined_p0_p1(datescans,recipe,parfile=''):
         # Clean up the output. The python wrapper creates a temporary directory beginning with ORACworking* (given by output.outdir)
         # to store the files -- we want to move the files to our directory tree and remove the temporary directory.
         os.system('mv {}/* {}/'.format(output.outdir,outpath))
-        os.system('rm -r {}'.format(output.outdir))
+        os.system('rm -rf {}'.format(output.outdir))
         os.system('mkdir {}/logfiles; mv {}/*log* {}/logfiles'.format(outpath,outpath,outpath))
         os.system('mkdir {}/imagefiles; mv {}/*png {}/imagefiles'.format(outpath,outpath,outpath))
 
@@ -90,14 +93,14 @@ def reduce_combined_p0_p1(datescans,recipe,parfile=''):
     for datescan,output in zip(datescans,outputs):
         #Save the Summary to a file
         summaryfile.write('~~~{}~~~\n#######\n'.format(datescan))
-        summaryfile.write('The run log for {} can be found here {}'.format(datescan,output.runlog))
-        summaryfile.write('\nThe datafiles are listed below:')
+        summaryfile.write('\nThe run log for {} can be found here {}'.format(datescan,re.sub('ORACworking\w+/','logfiles',output.runlog)))
+        summaryfile.write('\n\nThe datafiles are listed below:\n')
         summaryfile.write(re.sub('ORACworking\w+/','','\n'.join(output.datafiles)))
-        summaryfile.write('\nThe image files are listed below:')
+        summaryfile.write('\n\nThe image files are listed below:\n')
         summaryfile.write(re.sub('ORACworking\w+/','','\n'.join(output.imagefiles)))
-        summaryfile.write('\nThe additional logs are listed below:')
+        summaryfile.write('\n\nThe additional logs are listed below:\n')
         summaryfile.write(re.sub('ORACworking\w+/','','\n'.join(output.logfiles)))
-        summaryfile.write('')
+        summaryfile.write('\n')
     
         #Print the summary to the screen
         print('~~~{}~~~\n#######\n'.format(datescan))
@@ -174,7 +177,7 @@ def reduce_individual_p0_p1(datescans,recipe,parfile=''):
             # to store the files -- we want to move the files to our directory tree and remove the temporary directory.
             #####
             os.system('mv {}/* {}'.format(output.outdir,outpath))
-            os.system('rm -r {}'.format(output.outdir))
+            os.system('rm -rf {}'.format(output.outdir))
             os.system('mkdir {}/logfiles; mv {}/*log* {}/logfiles'.format(outpath,outpath,outpath))
             os.system('mkdir {}/imagefiles; mv {}/*png {}/imagefiles'.format(outpath,outpath,outpath))
 

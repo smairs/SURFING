@@ -77,14 +77,13 @@ def coadd_results(datescans,mol_subband,region):
     # Perform co-adds by molecule
     for eachmol in mol_subband:
 
-        # Define an empty list to populate with all the ga*reduced001.sdf cubes for this molecule by date and scan
+        # Define an empty list to populate with all the ga*reduced0*.sdf cubes for this molecule by date and scan
         reduced_files = []
         for datescan in datescans:
 
             # This directory was created and populated in previous steps found in SURFING.reduce
             reducedpath = 'reduced/{}/{}/'.format(datescan.split('_')[0],datescan.split('_')[-1].zfill(5))
-            reduced_files = reduced_files+list(glob.glob(reducedpath+'ga*_{}_reduced001.sdf'.format(mol_subband[eachmol])))
-
+            reduced_files = reduced_files+list(glob.glob(reducedpath+'ga*_{}_reduced0*.sdf'.format(mol_subband[eachmol])))
 
         #####
         # We will first co-add all new observations together, then co-add the result with the existing, main co-added file.
@@ -101,20 +100,21 @@ def coadd_results(datescans,mol_subband,region):
 
         # In the case that we are only reducing one observation - we don't need to co-add it with itself!
         elif len(reduced_files)==1:
-            os.system('mv {} {}'.format(reduced_files[0],coadd_out))
+            os.system('cp {} {}'.format(reduced_files[0],coadd_out))
     
         else:
             try:
                 print(reduced_files[1])
             except IndexError:
-                print('Oh no! There are no ga*_{}_reduced001.sdf files to co-add! It appears that there is no new {} data in \
-                        the listed datescans!'.format(mol_subband[eachmol],eachmol))
+                print('Oh no! There are no ga*_{}_reduced0*.sdf files to co-add! It appears that there is no new {} data in '\
+                        'the listed datescans!'.format(mol_subband[eachmol],eachmol))
 
         # Make sure that the official co-add exists. If it doesn't - move the new co-added observations to
         # the main "coadds" directory and that will become the official co-add.
         if not os.path.exists('coadds'):
             os.system('mkdir coadds')
-            os.system('mv {} coadds/{}_{}_coadd.sdf'.format(coadd_out,region,eachmol))
+        if not os.path.exists('coadds/{}_{}_coadd.sdf'.format(region,eachmol)):
+            os.system('cp {} coadds/{}_{}_coadd.sdf'.format(coadd_out,region,eachmol))
         else:
             # Perform the coadd
             kappa.wcsmosaic([coadd_out,'coadds/{}_{}_coadd.sdf'.format(region,eachmol)],out='coadds/{}_{}_coadd_new.sdf'.format(region,eachmol),ref='coadds/{}_{}_coadd.sdf'.format(region,eachmol))
@@ -124,11 +124,11 @@ def coadd_results(datescans,mol_subband,region):
             os.system('mv coadds/{}_{}_coadd_new.sdf coadds/{}_{}_coadd.sdf'.format(region,eachmol,region,eachmol))
 
         # Remove temp directory
-        os.system('rm -f coadd_temp/')
+        os.system('rm -rf coadd_temp/')
 
         # Create a new FITS copy of the coadd
         if os.path.exists('coadds/{}_{}_coadd.fits'.format(region,eachmol)):
-            os.system('rm coadds/{}_{}_coadd.fits'.format(region,eachmol))
+            os.system('rm -f coadds/{}_{}_coadd.fits'.format(region,eachmol))
         # Convert SDF to fits
         convert.ndf2fits('coadds/{}_{}_coadd.sdf'.format(region,eachmol),'coadds/{}_{}_coadd.fits'.format(region,eachmol))
 
