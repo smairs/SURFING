@@ -96,7 +96,12 @@ def coadd_results(datescans,mol_subband,region):
 
         # Check to see if we have more than one new observation to co-add together for this molecule!
         if len(reduced_files)>1:
-            kappa.wcsmosaic(reduced_files,out=coadd_out,ref=reduced_files[0])
+            wcsmosaicin = open('mosaicin.lis','w')
+            for i in reduced_files:
+                wcsmosaicin.write('{}\n'.format(i))
+            wcsmosaicin.close()
+            kappa.wcsmosaic('^mosaicin.lis',out=coadd_out,ref=reduced_files[0],lbnd='!',ubnd='!')
+            os.system('rm -f mosaicin.lis')
 
         # In the case that we are only reducing one observation - we don't need to co-add it with itself!
         elif len(reduced_files)==1:
@@ -117,7 +122,13 @@ def coadd_results(datescans,mol_subband,region):
             os.system('cp {} coadds/{}_{}_coadd.sdf'.format(coadd_out,region,eachmol))
         else:
             # Perform the coadd
-            kappa.wcsmosaic([coadd_out,'coadds/{}_{}_coadd.sdf'.format(region,eachmol)],out='coadds/{}_{}_coadd_new.sdf'.format(region,eachmol),ref='coadds/{}_{}_coadd.sdf'.format(region,eachmol))
+            wcsmosaicin = open('mosaicin.lis','w')
+            wcsmosaicin.write('{}\n'.format(coadd_out))
+            wcsmosaicin.write('coadds/{}_{}_coadd.sdf'.format(region,eachmol))
+            wcsmosaicin.close()
+            kappa.wcsmosaic('^mosaicin.lis',out='coadds/{}_{}_coadd_new.sdf'.format(region,eachmol),ref='coadds/{}_{}_coadd.sdf'.format(region,eachmol),lbnd='!',ubnd='!')
+            os.system('rm -f mosaicin.lis')
+
             # Remove the old coadd
             os.system('rm -f coadds/{}_{}_coadd.sdf'.format(region,eachmol))
             # Rename the new coadd to be the official version
